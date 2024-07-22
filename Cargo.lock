@@ -2020,14 +2020,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hands"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "leafwing-input-manager",
-]
-
-[[package]]
 name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2371,6 +2363,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62bb907fe88d54d8d9ce32a3cceab4218ed2f6b7d35617cafe9adf84e43919cb"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "manos"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "leafwing-input-manager",
 ]
 
 [[package]]
