@@ -39,21 +39,17 @@ fn setup(mut commands: Commands) {
 //TODO! Only sets image size once
 fn add_image_size(
     mut commands: Commands,
-    mut sprites: Query<
-        (&Transform, &Handle<Image>, Entity),
-        (With<Sprite>, Without<ImageSize>),
-    >,
+    mut sprites: Query<(&Transform, &Handle<Image>, Entity), (With<Sprite>, Without<ImageSize>)>,
     assets: Res<Assets<Image>>,
 ) {
     for (transform, image_handle, entity) in sprites.iter_mut() {
         //TODO! possible crash on load with unwrap here! account for none!
 
-
         let image = match assets.get(image_handle) {
             Some(image) => image,
             None => {
                 return;
-            },
+            }
         };
 
         let image_dimensions = image.size().as_vec2();
