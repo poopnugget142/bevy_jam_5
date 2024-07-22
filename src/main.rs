@@ -41,13 +41,20 @@ fn add_image_size(
     mut commands: Commands,
     mut sprites: Query<
         (&Transform, &Handle<Image>, Entity),
-        (With<Sprite>, Without<ImageSize>, Changed<Handle<Image>>),
+        (With<Sprite>, Without<ImageSize>),
     >,
     assets: Res<Assets<Image>>,
 ) {
     for (transform, image_handle, entity) in sprites.iter_mut() {
         //TODO! possible crash on load with unwrap here! account for none!
-        let image_dimensions = assets.get(image_handle).unwrap().size().as_vec2();
+
+
+        let image = match assets.get(image_handle) {
+            Some(image) => image,
+            None => { return; },
+        };
+
+        let image_dimensions = image.size().as_vec2();
         let scaled_image_dimension = image_dimensions * transform.scale.truncate();
         let bounding_box =
             Rect::from_center_size(transform.translation.truncate(), scaled_image_dimension);
