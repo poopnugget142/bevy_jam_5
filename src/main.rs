@@ -4,6 +4,7 @@
 // Feel free to delete this line.
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
+use avian2d::prelude::*;
 use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
 
@@ -17,13 +18,18 @@ pub struct BoundingBox(Rect);
 
 fn main() {
     let mut app = App::new();
-    app.add_plugins(DefaultPlugins.set(AssetPlugin {
-        // Wasm builds will check for meta files (that don't exist) if this isn't set.
-        // This causes errors and even panics in web builds on itch.
-        // See https://github.com/bevyengine/bevy_github_ci_template/issues/48.
-        meta_check: AssetMetaCheck::Never,
-        ..default()
-    }))
+    app.add_plugins((
+        DefaultPlugins.set(AssetPlugin {
+            // Wasm builds will check for meta files (that don't exist) if this isn't set.
+            // This causes errors and even panics in web builds on itch.
+            // See https://github.com/bevyengine/bevy_github_ci_template/issues/48.
+            meta_check: AssetMetaCheck::Never,
+            ..default()
+        }),
+        PhysicsPlugins::default(),
+        PhysicsDebugPlugin::default(),
+    ))
+    .insert_resource(Gravity(Vec2::default()))
     .add_systems(Startup, setup)
     .add_systems(Update, (add_image_size, update_bounding_box));
 
@@ -40,6 +46,7 @@ fn setup(mut commands: Commands) {
 fn add_image_size(
     mut commands: Commands,
     mut sprites: Query<(&Transform, &Handle<Image>, Entity), (With<Sprite>, Without<ImageSize>)>,
+    has_rigid_body: Query<&RigidBody>,
     assets: Res<Assets<Image>>,
 ) {
     for (transform, image_handle, entity) in sprites.iter_mut() {
@@ -59,9 +66,11 @@ fn add_image_size(
 
         let mut e = commands.get_entity(entity).unwrap();
 
-        e.insert(ImageSize(image_dimensions));
+        e.insert((BoundingBox(bounding_box), ImageSize(image_dimensions)));
 
-        e.insert(BoundingBox(bounding_box));
+        if has_rigid_body.get(entity).is_ok() {
+            e.insert(Collider::rectangle(image_dimensions.x, image_dimensions.y));
+        }
     }
 }
 

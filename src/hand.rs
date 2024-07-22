@@ -1,3 +1,4 @@
+use avian2d::prelude::*;
 use bevy::prelude::*;
 use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
 use leafwing_input_manager::prelude::*;
@@ -45,6 +46,7 @@ fn spawn_hand(
             transform: Transform::from_scale(Vec3::new(0.25, 0.25, -1.0)),
             ..default()
         },
+        RigidBody::Dynamic,
         Grabbable,
     ));
 
@@ -59,6 +61,8 @@ fn spawn_hand(
             ..default()
         },
         InputManagerBundle::with_map(input_map),
+        RigidBody::Dynamic,
+        LinearVelocity::ZERO,
         Hand,
         CurrentHand,
     ));
@@ -67,7 +71,7 @@ fn spawn_hand(
 fn drop(
     mut commands: Commands,
     hands: Query<(&ActionState<HandActions>, Entity, &Grabbing), With<CurrentHand>>,
-    mut objects: Query<(&GlobalTransform, &mut Transform)>,
+    mut objects: Query<&mut Transform>,
 ) {
     if hands.is_empty() {
         return;
@@ -81,17 +85,12 @@ fn drop(
 
     let mut hand_commands = commands.entity(hand);
 
-    let (global_transform, mut transform) = objects.get_mut(grabbing.0).unwrap();
+    let mut transform = objects.get_mut(grabbing.0).unwrap();
 
-    let stored_transform = global_transform;
     hand_commands.remove_children(&[grabbing.0]);
     hand_commands.remove::<Grabbing>();
 
-    let mut position = stored_transform.translation();
-
-    position.z = -1.0;
-
-    transform.translation = position;
+    transform.translation.z = -1.0;
 }
 
 fn grab(
@@ -124,19 +123,24 @@ fn grab(
         if bounding_box.0.contains(hand_spot.truncate()) {
             let mut hand_commands = commands.entity(hand);
             hand_commands.insert(Grabbing(object));
-            hand_commands.add_child(object);
+            // hand_commands.add_child(object);
 
-            object_transform.translation = Vec3::new(0.0, -HAND_OFFSET, 1.0);
+            let mut joint = FixedJoint::new(object, hand);
+            joint.local_anchor2 = Vec2::new(0.0, -HAND_OFFSET);
+
+            commands.spawn(joint);
+
+            object_transform.translation.z = 1.0;
         }
     }
 }
 
 fn move_hand(
-    mut hands: Query<&mut Transform, With<CurrentHand>>,
+    mut hands: Query<(&Transform, &mut LinearVelocity), With<CurrentHand>>,
     windows: Query<&mut Window>,
     cameras: Query<(&Camera, &GlobalTransform)>,
 ) {
-    let mut transform = hands.single_mut();
+    let (transform, mut velocity) = hands.single_mut();
     let window = windows.single();
     let (camera, camera_transform) = cameras.single();
 
@@ -144,6 +148,11 @@ fn move_hand(
         .cursor_position()
         .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor))
     {
-        transform.translation = Vec3::new(cursor_position.x, cursor_position.y + HAND_OFFSET, 0.0);
+        let hand_position = transform.translation.truncate();
+        let goal_position = Vec2::new(cursor_position.x, cursor_position.y + HAND_OFFSET);
+        let cursor_dir = goal_position - hand_position;
+
+        velocity.x = cursor_dir.x * 5.0;
+        velocity.y = cursor_dir.y * 5.0;
     }
 }
