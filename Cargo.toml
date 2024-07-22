@@ -18,4 +18,3 @@ opt-level = 3
 [dependencies]
 bevy = "0.14"
 leafwing-input-manager = "0.14"
-bevy-inspector-egui = "0.25"
