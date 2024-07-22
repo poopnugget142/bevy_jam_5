@@ -51,7 +51,9 @@ fn add_image_size(
 
         let image = match assets.get(image_handle) {
             Some(image) => image,
-            None => { return; },
+            None => {
+                return;
+            },
         };
 
         let image_dimensions = image.size().as_vec2();
