@@ -6,7 +6,6 @@
 
 use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 mod hand;
 
