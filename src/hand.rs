@@ -1,9 +1,8 @@
-use avian2d::prelude::*;
-use bevy::prelude::*;
+use super::*;
+
+use avian2d::math::Vector;
 use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
 use leafwing_input_manager::prelude::*;
-
-use crate::BoundingBox;
 
 #[derive(Component)]
 pub struct Hand;
@@ -51,6 +50,7 @@ fn spawn_hand(
         LinearDamping(1.0),
     ));
 
+    //background
     commands.spawn((
         MaterialMesh2dBundle {
             mesh: Mesh2dHandle(meshes.add(Rectangle::new(1280.0, 720.0))),
@@ -60,11 +60,40 @@ fn spawn_hand(
         },
     ));
 
+    let left_corner = Transform::from_xyz(-SCREEN_W/2.0, -SCREEN_H/2.0, 0.0);
+    let right_corner = Transform::from_xyz(SCREEN_W/2.0, SCREEN_H/2.0, 0.0);
+
+    //WALLS
+    commands.spawn((
+        RigidBody::Static,
+        Collider::segment(Vector::new(0.0, 0.0), Vector::new(0.0, SCREEN_H)),
+        TransformBundle::from_transform(left_corner),
+    ));
+
+    commands.spawn((
+        RigidBody::Static,
+        Collider::segment(Vector::new(0.0, 0.0), Vector::new(SCREEN_W, 0.0)),
+        TransformBundle::from_transform(left_corner),
+    ));
+
+    commands.spawn((
+        RigidBody::Static,
+        Collider::segment(Vector::new(0.0, 0.0), Vector::new(0.0, -SCREEN_H)),
+        TransformBundle::from_transform(right_corner),
+    ));
+
+    commands.spawn((
+        RigidBody::Static,
+        Collider::segment(Vector::new(0.0, 0.0), Vector::new(-SCREEN_W, 0.0)),
+        TransformBundle::from_transform(right_corner),
+    ));
+
     //Input map
     let input_map = InputMap::new([(HandActions::Grab, MouseButton::Left)]);
 
     // Spawns the hand!
     commands.spawn((
+        Name::new("Hand"),
         MaterialMesh2dBundle {
             mesh: Mesh2dHandle(meshes.add(Rectangle::new(100.0, 1000.0))),
             material: materials.add(Color::hsl(18.0, 0.57, 0.79)),
@@ -73,6 +102,7 @@ fn spawn_hand(
         InputManagerBundle::with_map(input_map),
         RigidBody::Dynamic,
         LinearVelocity::ZERO,
+        LockedAxes::ROTATION_LOCKED,
         Hand,
         CurrentHand,
     ));
