@@ -4,6 +4,8 @@ use avian2d::math::Vector;
 use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
 use leafwing_input_manager::prelude::*;
 
+mod recording;
+
 #[derive(Component)]
 pub struct Hand;
 
@@ -16,10 +18,13 @@ pub struct Grabbing(Entity);
 #[derive(Component)]
 pub struct Grabbable;
 
+#[derive(Component)]
+pub struct Goal(Vec2);
+
 #[derive(Actionlike, PartialEq, Eq, Hash, Clone, Copy, Debug, Reflect)]
 enum HandActions {
     Grab,
-    Move,
+    Record,
 }
 
 const HAND_OFFSET: f32 = -500.0;
@@ -27,7 +32,9 @@ const HAND_OFFSET: f32 = -500.0;
 pub(super) fn register(app: &mut App) {
     app.add_plugins(InputManagerPlugin::<HandActions>::default())
         .add_systems(Startup, spawn_hand)
-        .add_systems(Update, (move_hand, grab, drop));
+        .add_systems(Update, (move_hand, grab, drop, update_goal));
+
+    recording::register(app);
 }
 
 fn spawn_hand(
@@ -89,7 +96,10 @@ fn spawn_hand(
     ));
 
     //Input map
-    let input_map = InputMap::new([(HandActions::Grab, MouseButton::Left)]);
+    let input_map = InputMap::new([
+        (HandActions::Grab, MouseButton::Left),
+        (HandActions::Record, MouseButton::Right),
+    ]);
 
     // Spawns the hand!
     commands.spawn((
@@ -99,6 +109,7 @@ fn spawn_hand(
             material: materials.add(Color::hsl(18.0, 0.57, 0.79)),
             ..default()
         },
+        Goal(Vec2::new(0.0, 0.0)),
         InputManagerBundle::with_map(input_map),
         RigidBody::Dynamic,
         LinearVelocity::ZERO,
@@ -181,23 +192,31 @@ fn grab(
 }
 
 fn move_hand(
-    mut hands: Query<(&Transform, &mut LinearVelocity), With<CurrentHand>>,
+    mut hands: Query<(&Transform, &mut LinearVelocity, &Goal), With<Hand>>,
+) {
+    let (transform, mut velocity, goal) = hands.single_mut();
+
+    let hand_position = transform.translation.truncate();
+    let cursor_dir = goal.0 - hand_position;
+
+    velocity.x = cursor_dir.x * 5.0;
+    velocity.y = cursor_dir.y * 5.0;
+}
+
+fn update_goal(
+    mut hands: Query<&mut Goal, With<CurrentHand>>,
     windows: Query<&mut Window>,
     cameras: Query<(&Camera, &GlobalTransform)>,
 ) {
-    let (transform, mut velocity) = hands.single_mut();
     let window = windows.single();
     let (camera, camera_transform) = cameras.single();
+    let mut goal = hands.single_mut();
 
     if let Some(cursor_position) = window
         .cursor_position()
         .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor))
     {
-        let hand_position = transform.translation.truncate();
         let goal_position = Vec2::new(cursor_position.x, cursor_position.y + HAND_OFFSET);
-        let cursor_dir = goal_position - hand_position;
-
-        velocity.x = cursor_dir.x * 5.0;
-        velocity.y = cursor_dir.y * 5.0;
+        *goal = Goal(goal_position);
     }
 }

@@ -8,7 +8,9 @@ use avian2d::prelude::*;
 use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
+
 mod hand;
+mod timer;
 
 #[derive(Component)]
 pub struct ImageSize(Vec2);
@@ -44,6 +46,7 @@ fn main() {
     .add_systems(Update, (add_image_size, update_bounding_box));
 
     hand::register(&mut app);
+    timer::register(&mut app);
 
     app.run();
 }
