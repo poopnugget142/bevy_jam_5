@@ -7,7 +7,7 @@
 use avian2d::prelude::*;
 use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
-
+use bevy::window::WindowResolution;
 mod hand;
 
 #[derive(Component)]
@@ -15,6 +15,9 @@ pub struct ImageSize(Vec2);
 
 #[derive(Component)]
 pub struct BoundingBox(Rect);
+
+pub const SCREEN_W : f32 = 1280.0;
+pub const SCREEN_H : f32 = 720.0;
 
 fn main() {
     let mut app = App::new();
@@ -24,6 +27,13 @@ fn main() {
             // This causes errors and even panics in web builds on itch.
             // See https://github.com/bevyengine/bevy_github_ci_template/issues/48.
             meta_check: AssetMetaCheck::Never,
+            ..default()
+        }).set(WindowPlugin {
+            primary_window: Some(Window {
+                resolution: WindowResolution::new(SCREEN_W, SCREEN_H),
+                resizable: false,
+                ..default()
+            }),
             ..default()
         }),
         PhysicsPlugins::default(),

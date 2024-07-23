@@ -48,6 +48,16 @@ fn spawn_hand(
         },
         RigidBody::Dynamic,
         Grabbable,
+        LinearDamping(1.0),
+    ));
+
+    commands.spawn((
+        MaterialMesh2dBundle {
+            mesh: Mesh2dHandle(meshes.add(Rectangle::new(1280.0, 720.0))),
+            material: materials.add(Color::hsl(0.0, 0.50, 0.50)),
+            transform: Transform::from_xyz(0.0, 0.0, -2.0),
+            ..default()
+        },
     ));
 
     //Input map
@@ -71,6 +81,7 @@ fn spawn_hand(
 fn drop(
     mut commands: Commands,
     hands: Query<(&ActionState<HandActions>, Entity, &Grabbing), With<CurrentHand>>,
+    joints: Query<&FixedJoint>,
     mut objects: Query<&mut Transform>,
 ) {
     if hands.is_empty() {
@@ -85,10 +96,14 @@ fn drop(
 
     let mut hand_commands = commands.entity(hand);
 
-    let mut transform = objects.get_mut(grabbing.0).unwrap();
-
-    hand_commands.remove_children(&[grabbing.0]);
     hand_commands.remove::<Grabbing>();
+    let joint = grabbing.0;
+
+    let object = joints.get(joint).unwrap().entity1;
+
+    commands.entity(joint).despawn();
+
+    let mut transform = objects.get_mut(object).unwrap();
 
     transform.translation.z = -1.0;
 }
@@ -121,14 +136,14 @@ fn grab(
     for (bounding_box, object, mut object_transform) in hands_and_objects.p1().iter_mut() {
         // Clicked on grabble thing attach to hand
         if bounding_box.0.contains(hand_spot.truncate()) {
-            let mut hand_commands = commands.entity(hand);
-            hand_commands.insert(Grabbing(object));
-            // hand_commands.add_child(object);
-
             let mut joint = FixedJoint::new(object, hand);
             joint.local_anchor2 = Vec2::new(0.0, -HAND_OFFSET);
 
-            commands.spawn(joint);
+            let joint_commands = commands.spawn(joint);
+            let joint_entity = joint_commands.id();
+
+            let mut hand_commands = commands.entity(hand);
+            hand_commands.insert(Grabbing(joint_entity));
 
             object_transform.translation.z = 1.0;
         }
