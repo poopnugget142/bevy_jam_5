@@ -19,7 +19,7 @@ fn submitting (
 ) {
     let window = windows.single();
 
-    if let None = window.cursor_position() {
+    if window.cursor_position().is_none() {
         // submitting
         if deliveries.0 >= 3 {
             ev_level.send(LoadLevel(current_level.0+1));

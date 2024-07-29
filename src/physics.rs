@@ -6,6 +6,6 @@ pub(super) fn register(app: &mut App) {
         .insert_resource(Gravity(Vec2::default()))
         .add_plugins((
             PhysicsPlugins::default(),
-            PhysicsDebugPlugin::default(),
+            // PhysicsDebugPlugin::default(),
         ));
 }

@@ -109,7 +109,7 @@ fn drop(
         }
 
         if let Ok(mut recording) = is_recording.get_mut(hand) {
-            let elapsed = recording.timer.elapsed().clone();
+            let elapsed = recording.timer.elapsed();
     
             recording.grabs.push(elapsed);
         }
@@ -147,7 +147,7 @@ fn grab(
         }
     
         if let Ok(mut recording) = is_recording.get_mut(hand) {
-            let elapsed = recording.timer.elapsed().clone();
+            let elapsed = recording.timer.elapsed();
     
             recording.grabs.push(elapsed);
         }
@@ -162,7 +162,7 @@ fn grab(
             let mut object = None;
             //TODO! stupidest thing I've ever seen HOW DO YOU CODE IN RUST
             for x in colliding_entities.0.iter() {
-                if let Ok(_) = objects.get(*x) {
+                if objects.get(*x).is_ok() {
                     object = Some(x);
                     break;
                 }
@@ -220,8 +220,6 @@ fn grab(
             
                     let mut hand_commands = commands.entity(hand);
                     hand_commands.insert(Grabbing(joint_entity));
-            
-                    // transform.translation.z = 1.0;
                 },
             }
         }

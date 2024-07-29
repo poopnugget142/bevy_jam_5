@@ -58,7 +58,7 @@ fn recording (
         recording.timer.tick(time.delta());
 
         let elasped = recording.timer.elapsed();
-        let goal_position = goal.0.clone();
+        let goal_position = goal.0;
 
         recording.record.push((elasped, goal_position));
 

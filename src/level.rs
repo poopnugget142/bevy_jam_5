@@ -1,10 +1,11 @@
-use std::fs;
 use avian2d::prelude::*;
 use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
 use hand::{CurrentHand, HandActions, Playback};
 use leafwing_input_manager::prelude::ActionState;
 use object::{Collector, GrabInteractions, Grabbable, Object, ObjectInfo};
 use serde::Deserialize;
+use bevy::reflect::TypePath;
+use bevy_common_assets::toml::TomlAssetPlugin;
 
 use super::*;
 
@@ -21,7 +22,7 @@ pub struct ColliderInfo {
     pub size: Option<Vec<f32>>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 struct LoadObject {
     texture_name: Option<String>,
     position: Vec<f32>,
@@ -35,7 +36,10 @@ struct LoadObject {
     anchored: Option<bool>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Resource)]
+struct LevelHandle(Option<Handle<Level>>);
+
+#[derive(Deserialize, Debug, Asset, TypePath, Clone)]
 struct Level {
     objects: Vec<LoadObject>,
     background_color: Vec<f32>,
@@ -43,16 +47,19 @@ struct Level {
 
 pub(super) fn register(app: &mut App) {
     app
+        .add_plugins(TomlAssetPlugin::<Level>::new(&["level.toml"]))
         .insert_resource(CurrentLevel(0))
         .add_event::<LoadLevel>()
         .add_systems(Startup, setup)
-        .add_systems(Update, (load_level, reload_level));
+        .add_systems(Update, (load_level, reload_level, load_event));
 }
 
 fn setup(
-    mut ev_level: EventWriter<LoadLevel>,
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
 ){
-    ev_level.send(LoadLevel(0));
+    let level = LevelHandle(Some(asset_server.load("levels/0.level.toml")));
+    commands.insert_resource(level);
 }
 
 fn reload_level(
@@ -69,20 +76,39 @@ fn reload_level(
     }
 }
 
+fn load_event(
+    mut commands: Commands,
+    mut ev_level: EventReader<LoadLevel>,
+    asset_server: Res<AssetServer>,
+) {
+    for ev in ev_level.read() {
+        dbg!(ev.0);
+        commands.insert_resource(CurrentLevel(ev.0));
+        let level = LevelHandle( Some(asset_server.load(format!("levels/{}.level.toml", ev.0))) );
+        commands.insert_resource(level);
+    }
+}
+
 // for now just load main.toml
 fn load_level(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut ev_level: EventReader<LoadLevel>,
     objects: Query<Entity, With<Object>>,
     hands: Query<Entity, With<Playback>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut levels: ResMut<Assets<Level>>,
+    mut the_level: ResMut<LevelHandle>,
 ) {
-    for ev in ev_level.read() {
+    if the_level.0.is_none() {
+        return;
+    }
 
-        dbg!(ev.0);
-        commands.insert_resource(CurrentLevel(ev.0));
+    if let Some(level) = levels.get(the_level.0.clone().unwrap().id()) {
+
+        let level = level.clone();
+
+        *the_level = LevelHandle(None);
 
         for object in objects.iter() {
             commands.entity(object).despawn();
@@ -93,9 +119,6 @@ fn load_level(
             commands.entity(hand).despawn();
         }
 
-        //TODO! test if this needs to be changed for release
-        let data = fs::read_to_string(format!("assets/levels/{}.toml", ev.0)).expect("Unable to read file");
-        let level: Level = toml::from_str(&data).unwrap();
         let background_color = level.background_color;
 
         //background
@@ -110,7 +133,7 @@ fn load_level(
         ));
 
         for object in level.objects {
-            let mut e = commands.spawn((Object));
+            let mut e = commands.spawn(Object);
 
             if object.texture_name.is_some() {
                 let texture = asset_server.load(object.texture_name.clone().unwrap());
