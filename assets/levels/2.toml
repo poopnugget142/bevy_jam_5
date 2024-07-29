@@ -1,0 +1,50 @@
+background_color = [0, 0.5, 0.5]
+
+[[objects]]
+texture_name = "ace_hearts.png"
+position = [-500.0, -200, -1.0]
+scale = [0.5, 0.5]
+grabbable = true
+grab = "Spawn"
+static = true
+sensor = true
+
+[[objects]]
+texture_name = "conveyer.png"
+position = [490, -200, -2]
+scale = [0.75, 0.75]
+collector = {collecting = "ace_hearts.png", interaction = "Count"}
+static = true
+sensor = true
+
+[[objects]]
+texture_name = "black.png"
+position = [0, -150, 0]
+scale = [10, 500]
+static = true
+anchored = true
+
+# WALLS
+[[objects]]
+position = [-640, -360, 0]
+scale = [1, 1]
+static = true
+collider_info = {name = "segment", size = [0, 720]}
+
+[[objects]]
+position = [-640, -360, 0]
+scale = [1, 1]
+static = true
+collider_info = {name = "segment", size = [1280, 0]}
+
+[[objects]]
+position = [640, 360, 0]
+scale = [1, 1]
+static = true
+collider_info = {name = "segment", size = [0, -720]}
+
+[[objects]]
+position = [640, 360, 0]
+scale = [1, 1]
+static = true
+collider_info = {name = "segment", size = [-1280, 0]}

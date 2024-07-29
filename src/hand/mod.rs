@@ -1,10 +1,14 @@
 use super::*;
 
-use avian2d::math::Vector;
-use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
+use avian2d::prelude::*;
 use leafwing_input_manager::prelude::*;
+use level::ColliderInfo;
+use object::{GrabInteractions, Grabbable, Grabbed, Object, ObjectInfo};
+use recording::Recording;
 
 mod recording;
+
+pub use recording::Playback;
 
 #[derive(Component)]
 pub struct Hand;
@@ -16,177 +20,210 @@ pub struct CurrentHand;
 pub struct Grabbing(Entity);
 
 #[derive(Component)]
-pub struct Grabbable;
-
-#[derive(Component)]
 pub struct Goal(Vec2);
 
 #[derive(Actionlike, PartialEq, Eq, Hash, Clone, Copy, Debug, Reflect)]
-enum HandActions {
+pub enum HandActions {
     Grab,
     Record,
+    Reload,
 }
 
-const HAND_OFFSET: f32 = -500.0;
+#[derive(Bundle)]
+struct HandBundle {
+    name: Name,
+    goal: Goal,
+    rigid_body: RigidBody,
+    velocity: LinearVelocity,
+    locked: LockedAxes,
+    hand: Hand,
+}
+
+impl Default for HandBundle {
+    fn default() -> Self {
+        Self {
+            name: Name::new("Hand"),
+            goal: Goal(Vec2::new(0.0, 0.0)),
+            rigid_body: RigidBody::Dynamic,
+            velocity: LinearVelocity::ZERO,
+            locked: LockedAxes::ROTATION_LOCKED,
+            hand: Hand,
+        }
+    }
+}
+
+const HAND_OFFSET: f32 = -200.0;
 
 pub(super) fn register(app: &mut App) {
     app.add_plugins(InputManagerPlugin::<HandActions>::default())
         .add_systems(Startup, spawn_hand)
-        .add_systems(Update, (move_hand, grab, drop, update_goal));
+        .add_systems(Update, (move_hand, grab, drop))
+        .add_systems(FixedUpdate, update_goal);
 
     recording::register(app);
 }
 
 fn spawn_hand(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
-    let texture = asset_server.load("ace_hearts.png");
-
-    //Spawns card
-    commands.spawn((
-        SpriteBundle {
-            texture,
-            transform: Transform::from_scale(Vec3::new(0.25, 0.25, -1.0)),
-            ..default()
-        },
-        RigidBody::Dynamic,
-        Grabbable,
-        LinearDamping(1.0),
-    ));
-
-    //background
-    commands.spawn((
-        MaterialMesh2dBundle {
-            mesh: Mesh2dHandle(meshes.add(Rectangle::new(1280.0, 720.0))),
-            material: materials.add(Color::hsl(0.0, 0.50, 0.50)),
-            transform: Transform::from_xyz(0.0, 0.0, -2.0),
-            ..default()
-        },
-    ));
-
-    let left_corner = Transform::from_xyz(-SCREEN_W/2.0, -SCREEN_H/2.0, 0.0);
-    let right_corner = Transform::from_xyz(SCREEN_W/2.0, SCREEN_H/2.0, 0.0);
-
-    //WALLS
-    commands.spawn((
-        RigidBody::Static,
-        Collider::segment(Vector::new(0.0, 0.0), Vector::new(0.0, SCREEN_H)),
-        TransformBundle::from_transform(left_corner),
-    ));
-
-    commands.spawn((
-        RigidBody::Static,
-        Collider::segment(Vector::new(0.0, 0.0), Vector::new(SCREEN_W, 0.0)),
-        TransformBundle::from_transform(left_corner),
-    ));
-
-    commands.spawn((
-        RigidBody::Static,
-        Collider::segment(Vector::new(0.0, 0.0), Vector::new(0.0, -SCREEN_H)),
-        TransformBundle::from_transform(right_corner),
-    ));
-
-    commands.spawn((
-        RigidBody::Static,
-        Collider::segment(Vector::new(0.0, 0.0), Vector::new(-SCREEN_W, 0.0)),
-        TransformBundle::from_transform(right_corner),
-    ));
-
     //Input map
-    let input_map = InputMap::new([
+    let mut input_map = InputMap::new([
         (HandActions::Grab, MouseButton::Left),
         (HandActions::Record, MouseButton::Right),
     ]);
 
+    input_map.insert(HandActions::Record, KeyCode::Space);
+    input_map.insert(HandActions::Reload, KeyCode::KeyR);
+
+    let texture = asset_server.load("hand.png");
+
     // Spawns the hand!
     commands.spawn((
-        Name::new("Hand"),
-        MaterialMesh2dBundle {
-            mesh: Mesh2dHandle(meshes.add(Rectangle::new(100.0, 1000.0))),
-            material: materials.add(Color::hsl(18.0, 0.57, 0.79)),
+        HandBundle::default(),
+        SpriteBundle {
+            texture,
+            transform: Transform::from_scale(Vec3::new(0.5, 0.5, 0.5)),
             ..default()
         },
-        Goal(Vec2::new(0.0, 0.0)),
         InputManagerBundle::with_map(input_map),
-        RigidBody::Dynamic,
-        LinearVelocity::ZERO,
-        LockedAxes::ROTATION_LOCKED,
-        Hand,
         CurrentHand,
-    ));
+    )).with_children(|parent| {
+        parent.spawn((
+            TransformBundle::from_transform(Transform::from_xyz(0.0, -HAND_OFFSET, 0.0)),
+            Collider::rectangle(400.0, 600.0),
+            Sensor,
+        ));
+    });
 }
 
 fn drop(
     mut commands: Commands,
-    hands: Query<(&ActionState<HandActions>, Entity, &Grabbing), With<CurrentHand>>,
+    hands: Query<(&ActionState<HandActions>, Entity, &Grabbing), With<Hand>>,
     joints: Query<&FixedJoint>,
-    mut objects: Query<&mut Transform>,
+    mut is_recording: Query<&mut Recording, With<CurrentHand>>,
 ) {
-    if hands.is_empty() {
-        return;
+    for (action, hand, grabbing) in hands.iter() {
+        if !action.just_pressed(&HandActions::Grab) {
+            continue;
+        }
+
+        if let Ok(mut recording) = is_recording.get_mut(hand) {
+            let elapsed = recording.timer.elapsed().clone();
+    
+            recording.grabs.push(elapsed);
+        }
+    
+        let mut hand_commands = commands.entity(hand);
+    
+        hand_commands.remove::<Grabbing>();
+        let joint = grabbing.0;
+    
+        let object = joints.get(joint).unwrap().entity1;
+    
+        let mut object_commands = commands.entity(object);
+        object_commands.insert(Grabbable);
+        object_commands.remove::<Grabbed>();
+
+        commands.entity(joint).despawn();
     }
-
-    let (action, hand, grabbing) = hands.single();
-
-    if !action.just_pressed(&HandActions::Grab) {
-        return;
-    }
-
-    let mut hand_commands = commands.entity(hand);
-
-    hand_commands.remove::<Grabbing>();
-    let joint = grabbing.0;
-
-    let object = joints.get(joint).unwrap().entity1;
-
-    commands.entity(joint).despawn();
-
-    let mut transform = objects.get_mut(object).unwrap();
-
-    transform.translation.z = -1.0;
 }
 
 fn grab(
     mut commands: Commands,
-    //TODO! see if possible work around for this because it's annoying
-    mut hands_and_objects: ParamSet<(
-        Query<
-            (&ActionState<HandActions>, &Transform, Entity),
-            (With<CurrentHand>, Without<Grabbing>),
-        >,
-        Query<(&BoundingBox, Entity, &mut Transform), With<Grabbable>>,
-    )>,
+    hands: Query<
+        (&ActionState<HandActions>, Entity, &Children),
+        (With<Hand>, Without<Grabbing>),
+    >,
+    collisions: Query<&CollidingEntities>,
+    objects: Query<(&Transform, &ObjectInfo, &ColliderInfo), With<Grabbable>>,
+    //TODO! only one hand can record current hand isn't required
+    mut is_recording: Query<&mut Recording, With<CurrentHand>>,
+    asset_server: Res<AssetServer>,
 ) {
-    let binding = hands_and_objects.p0();
+    for (action, hand, children) in hands.iter() {
+        if !action.just_pressed(&HandActions::Grab) {
+            continue;
+        }
+    
+        if let Ok(mut recording) = is_recording.get_mut(hand) {
+            let elapsed = recording.timer.elapsed().clone();
+    
+            recording.grabs.push(elapsed);
+        }
+    
+        for child in children.iter() {
+            let colliding_entities = collisions.get(*child).unwrap();
+    
+            if colliding_entities.is_empty() {
+                continue;
+            }
+    
+            let mut object = None;
+            //TODO! stupidest thing I've ever seen HOW DO YOU CODE IN RUST
+            for x in colliding_entities.0.iter() {
+                if let Ok(_) = objects.get(*x) {
+                    object = Some(x);
+                    break;
+                }
+            }
+    
+            if object.is_none() {
+                continue;
+            }
 
-    if binding.is_empty() {
-        return;
-    }
+            let mut object = *object.unwrap();
 
-    let (action, transform, hand) = binding.single();
+            let (transform, interaction, collider_info) = objects.get(object).unwrap();
 
-    if !action.just_pressed(&HandActions::Grab) {
-        return;
-    }
+            match interaction.grab {
+                GrabInteractions::Grab => {
+                    let mut object_commands = commands.entity(object);
+                    object_commands.remove::<Grabbable>();
+                    object_commands.insert(Grabbed(hand));
+    
+                    let mut joint = FixedJoint::new(object, hand);
+                    joint.local_anchor2 = Vec2::new(0.0, -HAND_OFFSET);
+            
+                    let joint_commands = commands.spawn(joint);
+                    let joint_entity = joint_commands.id();
+            
+                    let mut hand_commands = commands.entity(hand);
+                    hand_commands.insert(Grabbing(joint_entity));
+                },
+                GrabInteractions::Spawn => {
+                    let texture = asset_server.load(interaction.texture_name.clone());
+                    object = commands.spawn((
+                        SpriteBundle {
+                            texture,
+                            transform: *transform,
+                            ..default()
+                        },
+                        RigidBody::Dynamic,
+                        LinearDamping(1.0),
+                        Object,
+                        collider_info.clone(),
+                        ObjectInfo {
+                            grab: GrabInteractions::Grab,
+                            texture_name: interaction.texture_name.clone(),
+                        }
+                    )).id();
 
-    let hand_spot = transform.translation + Vec3::new(0.0, -HAND_OFFSET, 0.0);
-
-    for (bounding_box, object, mut object_transform) in hands_and_objects.p1().iter_mut() {
-        // Clicked on grabble thing attach to hand
-        if bounding_box.0.contains(hand_spot.truncate()) {
-            let mut joint = FixedJoint::new(object, hand);
-            joint.local_anchor2 = Vec2::new(0.0, -HAND_OFFSET);
-
-            let joint_commands = commands.spawn(joint);
-            let joint_entity = joint_commands.id();
-
-            let mut hand_commands = commands.entity(hand);
-            hand_commands.insert(Grabbing(joint_entity));
-
-            object_transform.translation.z = 1.0;
+                    let mut object_commands = commands.entity(object);
+                    object_commands.insert(Grabbed(hand));
+    
+                    let mut joint = FixedJoint::new(object, hand);
+                    joint.local_anchor2 = Vec2::new(0.0, -HAND_OFFSET);
+            
+                    let joint_commands = commands.spawn(joint);
+                    let joint_entity = joint_commands.id();
+            
+                    let mut hand_commands = commands.entity(hand);
+                    hand_commands.insert(Grabbing(joint_entity));
+            
+                    // transform.translation.z = 1.0;
+                },
+            }
         }
     }
 }
@@ -194,13 +231,13 @@ fn grab(
 fn move_hand(
     mut hands: Query<(&Transform, &mut LinearVelocity, &Goal), With<Hand>>,
 ) {
-    let (transform, mut velocity, goal) = hands.single_mut();
+    for (transform, mut velocity, goal) in hands.iter_mut() {
+        let hand_position = transform.translation.truncate();
+        let cursor_dir = goal.0 - hand_position;
 
-    let hand_position = transform.translation.truncate();
-    let cursor_dir = goal.0 - hand_position;
-
-    velocity.x = cursor_dir.x * 5.0;
-    velocity.y = cursor_dir.y * 5.0;
+        velocity.x = cursor_dir.x * 5.0;
+        velocity.y = cursor_dir.y * 5.0;
+    }
 }
 
 fn update_goal(

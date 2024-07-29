@@ -1,0 +1,41 @@
+background_color = [30, 0.25, 0.91]
+
+[[objects]]
+texture_name = "test_play.png"
+position = [0, 0, -1]
+scale = [1, 1]
+grabbable = true
+collider_info = {name = "circle"}
+
+[[objects]]
+texture_name = "conveyer.png"
+position = [490, 0, -2]
+scale = [0.75, 0.75]
+collector = {collecting = "test_play.png", interaction = "FinishLevel"}
+static = true
+sensor = true
+
+# WALLS
+[[objects]]
+position = [-640, -360, 0]
+scale = [1, 1]
+static = true
+collider_info = {name = "segment", size = [0, 720]}
+
+[[objects]]
+position = [-640, -360, 0]
+scale = [1, 1]
+static = true
+collider_info = {name = "segment", size = [1280, 0]}
+
+[[objects]]
+position = [640, 360, 0]
+scale = [1, 1]
+static = true
+collider_info = {name = "segment", size = [0, -720]}
+
+[[objects]]
+position = [640, 360, 0]
+scale = [1, 1]
+static = true
+collider_info = {name = "segment", size = [-1280, 0]}
